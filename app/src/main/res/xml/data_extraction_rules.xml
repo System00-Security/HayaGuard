@@ -1,34 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-   Data extraction rules for CleanLens/HayaGuard app (API 31+)
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
--->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Include user settings and statistics -->
         <include domain="sharedpref" path="hayaguard_settings.xml"/>
         <include domain="sharedpref" path="hayaguard_stats.xml"/>
         <include domain="sharedpref" path="feed_dna_stats.xml"/>
-
-        <!-- Exclude cache and temporary files -->
-        <exclude domain="cache" path="."/>
-        <exclude domain="database" path="webview.db"/>
-        <exclude domain="database" path="webviewCache.db"/>
-        <exclude domain="file" path="cronet_cache/"/>
-        <exclude domain="external" path="."/>
     </cloud-backup>
-
     <device-transfer>
-        <!-- Include user settings and statistics for device-to-device transfer -->
         <include domain="sharedpref" path="hayaguard_settings.xml"/>
         <include domain="sharedpref" path="hayaguard_stats.xml"/>
         <include domain="sharedpref" path="feed_dna_stats.xml"/>
-
-        <!-- Exclude cache and temporary files -->
-        <exclude domain="cache" path="."/>
-        <exclude domain="database" path="webview.db"/>
-        <exclude domain="database" path="webviewCache.db"/>
-        <exclude domain="file" path="cronet_cache/"/>
-        <exclude domain="external" path="."/>
     </device-transfer>
 </data-extraction-rules>
