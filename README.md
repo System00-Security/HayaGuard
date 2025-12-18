@@ -1,7 +1,7 @@
 # HayaGuard
 
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp" width="120" alt="HayaGuard Logo">
+  <img src="assets/logo.svg" width="120" alt="HayaGuard Logo">
 </p>
 
 <p align="center">
