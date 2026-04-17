@@ -9,13 +9,30 @@ import kotlinx.coroutines.withTimeout
 class ContentFilterPipeline(context: Context) {
 
     private val nsfwjsDetector = NSFWJSDetector(context)
-    private val nudeNetDetector = NudeNetDetector(context)
+    private val nudeNetDetector: NudeNetDetector? = if (DeviceCapabilityProfiler.getTier() != DeviceTier.LOW_END) {
+        NudeNetDetector(context)
+    } else {
+        null
+    }
     private val contextValidator = MLKitContextValidator()
 
     companion object {
         private const val TAG = "ContentFilterPipeline"
         private const val MIN_DIMENSION = 100
         private const val MIN_SKIN_RATIO = 0.15f
+        
+        @Volatile
+        private var isPaused = false
+        
+        fun pause() {
+            isPaused = true
+        }
+        
+        fun resume() {
+            isPaused = false
+        }
+        
+        fun isPaused(): Boolean = isPaused
     }
 
     data class FilterResult(
@@ -26,6 +43,15 @@ class ContentFilterPipeline(context: Context) {
     )
 
     suspend fun processImage(bitmap: Bitmap): FilterResult {
+        if (isPaused) {
+            return FilterResult(false, 0f, "", "paused")
+        }
+        
+        if (MemoryManager.shouldSkipProcessing()) {
+            Log.w(TAG, "Skipping processing due to critical memory pressure")
+            return FilterResult(false, 0f, "", "memory_skip")
+        }
+        
         if (bitmap.width < MIN_DIMENSION || bitmap.height < MIN_DIMENSION) {
             return FilterResult(false, 0f, "", "size_skip")
         }
@@ -48,19 +74,28 @@ class ContentFilterPipeline(context: Context) {
                 AdaptivePerformanceEngine.TimeoutFallbackAction.BLUR -> FilterResult(true, 0.5f, "timeout", "timeout_blur")
                 AdaptivePerformanceEngine.TimeoutFallbackAction.SHOW -> FilterResult(false, 0f, "", "timeout_show")
             }
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OOM during image processing")
+            MemoryManager.onLowMemory()
+            FilterResult(false, 0f, "", "oom_skip")
         }
     }
 
     private suspend fun performInference(bitmap: Bitmap): FilterResult {
         val scaledNsfwjs = BitmapPool.scaleForNsfwjs(bitmap)
-        val scaledNudeNet = BitmapPool.scaleForNudeNet(bitmap)
+        val useNudeNet = nudeNetDetector != null && !AdaptivePerformanceEngine.shouldSkipNudeNet()
+        val scaledNudeNet = if (useNudeNet) BitmapPool.scaleForNudeNet(bitmap) else null
 
         try {
             val nsfwjsResult = nsfwjsDetector.detectNSFW(scaledNsfwjs)
-            val nudeNetResult = nudeNetDetector.detectNSFW(scaledNudeNet)
+            val nudeNetResult = if (useNudeNet && scaledNudeNet != null) {
+                nudeNetDetector?.detectNSFW(scaledNudeNet)
+            } else {
+                null
+            }
 
             val isNsfwjsFlagged = nsfwjsResult.isNSFW
-            val isNudeNetFlagged = nudeNetResult.isNSFW
+            val isNudeNetFlagged = nudeNetResult?.isNSFW ?: false
 
             if (!isNsfwjsFlagged && !isNudeNetFlagged) {
                 return FilterResult(false, 0f, "", "ml_pass")
@@ -69,7 +104,7 @@ class ContentFilterPipeline(context: Context) {
             val maxConfidence: Float
             val category: String
 
-            if (nudeNetResult.confidence > nsfwjsResult.confidence) {
+            if (nudeNetResult != null && nudeNetResult.confidence > nsfwjsResult.confidence) {
                 maxConfidence = nudeNetResult.confidence
                 category = "nudenet"
             } else {
@@ -88,13 +123,13 @@ class ContentFilterPipeline(context: Context) {
 
         } finally {
             BitmapPool.release(scaledNsfwjs)
-            BitmapPool.release(scaledNudeNet)
+            scaledNudeNet?.let { BitmapPool.release(it) }
         }
     }
 
     fun close() {
         nsfwjsDetector.close()
-        nudeNetDetector.close()
+        nudeNetDetector?.close()
         contextValidator.close()
         BitmapPool.clear()
     }

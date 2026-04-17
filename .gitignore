@@ -76,3 +76,4 @@ secrets.properties
 *.env*.jks
 *.keystore
 keystore_base64.txt
+improvement_ideas.md

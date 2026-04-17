@@ -2,6 +2,7 @@ package com.hayaguard.app
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.LruCache
 import kotlin.math.abs
 
 object ImagePreFilter {
@@ -9,18 +10,38 @@ object ImagePreFilter {
     private const val MIN_WIDTH = 80
     private const val MIN_HEIGHT = 80
     private const val SAMPLE_STEP = 5
+    private const val CACHE_SIZE = 100
+    
+    private val colorAnalysisCache = LruCache<Long, ColorAnalysis>(CACHE_SIZE)
 
     data class FilterResult(
         val shouldScan: Boolean,
         val reason: String
     )
+    
+    private fun computeBitmapHash(bitmap: Bitmap): Long {
+        val w = bitmap.width
+        val h = bitmap.height
+        var hash = (w.toLong() shl 32) or h.toLong()
+        val samplePoints = listOf(
+            0 to 0, w/2 to 0, w-1 to 0,
+            0 to h/2, w/2 to h/2, w-1 to h/2,
+            0 to h-1, w/2 to h-1, w-1 to h-1
+        )
+        for ((x, y) in samplePoints) {
+            val safeX = x.coerceIn(0, w - 1)
+            val safeY = y.coerceIn(0, h - 1)
+            hash = hash xor (bitmap.getPixel(safeX, safeY).toLong() * 31)
+        }
+        return hash
+    }
 
     fun shouldScanImage(bitmap: Bitmap): FilterResult {
         if (bitmap.width < MIN_WIDTH || bitmap.height < MIN_HEIGHT) {
             return FilterResult(false, "too_small")
         }
 
-        val colorAnalysis = analyzeColors(bitmap)
+        val colorAnalysis = getColorAnalysisCached(bitmap)
         
         if (colorAnalysis.isGrayscale) {
             return FilterResult(true, "grayscale_scan")
@@ -63,6 +84,18 @@ object ImagePreFilter {
         val hasHighSaturation: Boolean,
         val hasAnimatedStyle: Boolean
     )
+    
+    private fun getColorAnalysisCached(bitmap: Bitmap): ColorAnalysis {
+        val hash = computeBitmapHash(bitmap)
+        colorAnalysisCache.get(hash)?.let { return it }
+        val analysis = analyzeColors(bitmap)
+        colorAnalysisCache.put(hash, analysis)
+        return analysis
+    }
+    
+    fun clearCache() {
+        colorAnalysisCache.evictAll()
+    }
 
     private fun analyzeColors(bitmap: Bitmap): ColorAnalysis {
         var skinPixels = 0

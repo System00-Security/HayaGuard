@@ -18,6 +18,7 @@ object SettingsManager {
     private const val KEY_QUICK_LENS_ENABLED = "quick_lens_enabled"
     private const val KEY_HIDE_REELS_ENABLED = "hide_reels_enabled"
     private const val KEY_FRIENDS_ONLY_ENABLED = "friends_only_enabled"
+    private const val KEY_BATTERY_SAVER_ENABLED = "battery_saver_enabled"
 
     private lateinit var prefs: SharedPreferences
 
@@ -42,7 +43,7 @@ object SettingsManager {
     }
 
     fun isQuickLensEnabled(): Boolean {
-        return prefs.getBoolean(KEY_QUICK_LENS_ENABLED, true)
+        return prefs.getBoolean(KEY_QUICK_LENS_ENABLED, false)
     }
 
     fun setQuickLensEnabled(enabled: Boolean) {
@@ -63,6 +64,14 @@ object SettingsManager {
 
     fun setFriendsOnlyEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_FRIENDS_ONLY_ENABLED, enabled).apply()
+    }
+
+    fun isBatterySaverEnabled(): Boolean {
+        return prefs.getBoolean(KEY_BATTERY_SAVER_ENABLED, false)
+    }
+
+    fun setBatterySaverEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BATTERY_SAVER_ENABLED, enabled).apply()
     }
 
     fun getTimeLimitMinutes(): Int {

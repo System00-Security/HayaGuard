@@ -79,8 +79,17 @@ class HayaModeProcessor(context: Context) {
             val faceWidth = right - left
             val faceHeight = bottom - top
             
-            if (faceWidth < 20 || faceHeight < 20) {
-                Log.d(TAG, "Face $index too small: ${faceWidth}x${faceHeight}")
+            // Skip faces smaller than 35px - these are usually profile pics/avatars
+            // Profile pictures in feed headers are typically small and belong to the poster
+            if (faceWidth < 35 || faceHeight < 35) {
+                Log.d(TAG, "Face $index too small (likely profile pic): ${faceWidth}x${faceHeight}")
+                continue
+            }
+            
+            // Skip very small relative faces (less than 5% of image) - likely profile pics/avatars
+            val faceAreaRatio = (faceWidth.toFloat() * faceHeight) / (bitmap.width.toFloat() * bitmap.height)
+            if (faceAreaRatio < 0.01f) {
+                Log.d(TAG, "Face $index too small relative to image (${(faceAreaRatio * 100).toInt()}%) - skipping")
                 continue
             }
 
@@ -98,8 +107,9 @@ class HayaModeProcessor(context: Context) {
                     else -> false
                 }
 
-                if (shouldBlur && genderResult.confidence > 0.5f) {
-                    Log.d(TAG, "Blurring face $index (opposite gender)")
+                // Increased confidence threshold to 0.65 to reduce false positives
+                if (shouldBlur && genderResult.confidence > 0.65f) {
+                    Log.d(TAG, "Blurring face $index (opposite gender with high confidence)")
                     pixelateFaceRegion(mutableBitmap, canvas, Rect(left, top, right, bottom))
                     facesBlurred++
                 }

@@ -46,8 +46,39 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden" />
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:launchMode="singleTask">
+            
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.facebook.com" />
+                <data android:scheme="https" android:host="m.facebook.com" />
+                <data android:scheme="https" android:host="facebook.com" />
+                <data android:scheme="https" android:host="fb.com" />
+                <data android:scheme="https" android:host="fb.watch" />
+                <data android:scheme="https" android:host="www.fb.com" />
+                <data android:scheme="http" android:host="www.facebook.com" />
+                <data android:scheme="http" android:host="m.facebook.com" />
+                <data android:scheme="http" android:host="facebook.com" />
+            </intent-filter>
+            
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="fb" />
+            </intent-filter>
+            
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            
+        </activity>
 
         <activity
             android:name=".DashboardActivity"

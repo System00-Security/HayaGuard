@@ -51,7 +51,16 @@ class NSFWJSDetector(context: Context) {
             val inputBuffer = prepareInput(inputBitmap)
             val output = Array(1) { FloatArray(numClasses) }
 
-            interpreter!!.run(inputBuffer, output)
+            try {
+                interpreter!!.run(inputBuffer, output)
+            } catch (e: Exception) {
+                Log.e("NSFWJSDetector", "Inference failed, triggering GPU fallback: ${e.message}")
+                TFLiteInterpreterFactory.markGpuCrashed()
+                if (needsScale && inputBitmap != bitmap) {
+                    BitmapPool.release(inputBitmap)
+                }
+                return DetectionResult(false, 0f, "")
+            }
 
             if (needsScale && inputBitmap != bitmap) {
                 BitmapPool.release(inputBitmap)

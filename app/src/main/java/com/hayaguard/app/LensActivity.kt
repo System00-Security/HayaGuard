@@ -33,6 +33,13 @@ class LensActivity : AppCompatActivity() {
         const val EXTRA_IMAGE_URL = "extra_image_url"
         const val EXTRA_IMAGE_PATH = "extra_image_path"
         private const val TAG = "LensActivity"
+        
+        private fun getDeviceUserAgent(): String {
+            val model = android.os.Build.MODEL
+            val buildId = android.os.Build.ID
+            val androidVersion = android.os.Build.VERSION.RELEASE
+            return "Mozilla/5.0 (Linux; Android $androidVersion; $model Build/$buildId; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36"
+        }
     }
 
     private lateinit var ivLensImage: ImageView
@@ -106,7 +113,7 @@ class LensActivity : AppCompatActivity() {
                 connection.doInput = true
                 connection.connectTimeout = 10000
                 connection.readTimeout = 10000
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                connection.setRequestProperty("User-Agent", getDeviceUserAgent())
                 connection.connect()
 
                 val inputStream = connection.inputStream

@@ -51,6 +51,64 @@
             android:orientation="vertical"
             android:padding="20dp">
 
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardBackgroundColor="#1877F2"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_stats"
+                        app:tint="#FFFFFF" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="View Statistics"
+                            android:textColor="#FFFFFF"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="sans-serif"
+                            android:text="See your protection dashboard"
+                            android:textColor="#B3FFFFFF"
+                            android:textSize="12sp" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_arrow_forward"
+                        app:tint="#FFFFFF" />
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -552,7 +610,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif"
-                        android:text="Reels will be replaced with thoughtful quotes about privacy"
+                        android:text="Reels will be replaced with Quran reminders"
                         android:textColor="#8E8E93"
                         android:textSize="11sp" />
 
@@ -701,6 +759,80 @@
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif"
                         android:text="Disable to save battery and processor power"
+                        android:textColor="#8E8E93"
+                        android:textSize="11sp" />
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Battery Optimization"
+                android:textColor="#1C1C1E"
+                android:textSize="16sp" />
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardBackgroundColor="#F8F9FA"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif"
+                                android:text="Battery Saver Mode"
+                                android:textColor="#1C1C1E"
+                                android:textSize="15sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:fontFamily="sans-serif"
+                                android:text="Disable preloading and reduce processing"
+                                android:textColor="#8E8E93"
+                                android:textSize="12sp" />
+
+                        </LinearLayout>
+
+                        <androidx.appcompat.widget.SwitchCompat
+                            android:id="@+id/switchBatterySaver"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:fontFamily="sans-serif"
+                        android:text="Pauses ML processing when screen is off and disables image preloading"
                         android:textColor="#8E8E93"
                         android:textSize="11sp" />
 

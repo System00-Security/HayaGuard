@@ -28,16 +28,14 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.hayaguard.app.databinding.ActivityMainBinding
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
     private lateinit var progressBar: android.widget.ProgressBar
-    private lateinit var fabUnblur: FloatingActionButton
+    private lateinit var btnUnblur: ImageButton
     private lateinit var btnGoTop: ImageButton
-    private lateinit var btnStats: ImageButton
     private lateinit var btnSettings: ImageButton
     private lateinit var btnAbout: ImageButton
     private lateinit var btnHome: ImageButton
@@ -88,9 +86,8 @@ class MainActivity : AppCompatActivity() {
 
         webView = binding.webView
         progressBar = binding.progressBar
-        fabUnblur = binding.fabUnblur
+        btnUnblur = binding.btnUnblur
         btnGoTop = binding.btnGoTop
-        btnStats = binding.btnStats
         btnSettings = binding.btnSettings
         btnAbout = binding.btnAbout
         btnHome = binding.btnHome
@@ -103,7 +100,76 @@ class MainActivity : AppCompatActivity() {
         setupUnblurButton()
         setupScrollListener()
         
-        webView.loadUrl(facebookUrl)
+        val urlToLoad = handleIncomingIntent(intent)
+        webView.loadUrl(urlToLoad ?: facebookUrl)
+    }
+    
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent?.let {
+            val url = handleIncomingIntent(it)
+            url?.let { webView.loadUrl(it) }
+        }
+    }
+    
+    private fun handleIncomingIntent(intent: Intent): String? {
+        when (intent.action) {
+            Intent.ACTION_VIEW -> {
+                val uri = intent.data
+                if (uri != null) {
+                    val url = uri.toString()
+                    if (isFacebookUrl(url)) {
+                        return convertToMobileUrl(url)
+                    }
+                }
+            }
+            Intent.ACTION_SEND -> {
+                val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (sharedText != null) {
+                    val url = extractFacebookUrl(sharedText)
+                    if (url != null) {
+                        return convertToMobileUrl(url)
+                    }
+                }
+            }
+        }
+        return null
+    }
+    
+    private fun isFacebookUrl(url: String): Boolean {
+        val lowerUrl = url.lowercase()
+        return lowerUrl.contains("facebook.com") ||
+                lowerUrl.contains("fb.com") ||
+                lowerUrl.contains("fb.watch") ||
+                lowerUrl.startsWith("fb://")
+    }
+    
+    private fun extractFacebookUrl(text: String): String? {
+        val patterns = listOf(
+            "https?://[\\w.]*facebook\\.com[^\\s]*",
+            "https?://[\\w.]*fb\\.com[^\\s]*",
+            "https?://fb\\.watch[^\\s]*"
+        )
+        for (pattern in patterns) {
+            val regex = Regex(pattern)
+            val match = regex.find(text)
+            if (match != null) {
+                return match.value
+            }
+        }
+        return null
+    }
+    
+    private fun convertToMobileUrl(url: String): String {
+        var result = url
+        if (result.startsWith("fb://")) {
+            val path = result.removePrefix("fb://")
+            result = "https://m.facebook.com/$path"
+        }
+        result = result.replace("://www.facebook.com", "://m.facebook.com")
+        result = result.replace("://facebook.com", "://m.facebook.com")
+        return result
     }
 
     /**
@@ -137,17 +203,6 @@ class MainActivity : AppCompatActivity() {
             webView.evaluateJavascript("window.scrollTo({top: 0, behavior: 'smooth'});", null)
         }
 
-        btnStats.setOnClickListener {
-            val intent = Intent(this, DashboardActivity::class.java)
-            startActivity(intent)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, R.anim.slide_in_right, R.anim.slide_out_left)
-            } else {
-                @Suppress("DEPRECATION")
-                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-            }
-        }
-
         btnSettings.setOnClickListener {
             cameFromSettings = true
             previousHideReelsSetting = SettingsManager.isHideReelsEnabled()
@@ -178,10 +233,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUnblurButton() {
-        fabUnblur.setOnClickListener {
+        btnUnblur.setOnClickListener {
             val urls = webViewClient?.getLowConfidenceUrls() ?: emptySet()
             if (urls.isEmpty()) {
-                fabUnblur.visibility = View.GONE
+                btnUnblur.visibility = View.GONE
                 return@setOnClickListener
             }
             
@@ -190,7 +245,7 @@ class MainActivity : AppCompatActivity() {
                 .setMessage("${urls.size} image(s) with low confidence detection. Unblur all?")
                 .setPositiveButton("Unblur All") { _, _ ->
                     webViewClient?.unblurAll(webView)
-                    fabUnblur.visibility = View.GONE
+                    btnUnblur.visibility = View.GONE
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
@@ -199,7 +254,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUnblurButton() {
         val count = webViewClient?.getLowConfidenceUrls()?.size ?: 0
-        fabUnblur.visibility = if (count > 0) View.VISIBLE else View.GONE
+        btnUnblur.visibility = if (count > 0) View.VISIBLE else View.GONE
     }
 
     private fun initializeDetector() {
@@ -218,7 +273,7 @@ class MainActivity : AppCompatActivity() {
         webSettings.domStorageEnabled = true
         @Suppress("DEPRECATION")
         webSettings.databaseEnabled = true
-        webSettings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+        webSettings.cacheMode = WebSettings.LOAD_DEFAULT
         webSettings.allowFileAccess = false
         webSettings.allowContentAccess = true
         @Suppress("DEPRECATION")
@@ -232,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         webSettings.builtInZoomControls = true
         webSettings.displayZoomControls = false
         webSettings.setSupportZoom(true)
-        webSettings.mediaPlaybackRequiresUserGesture = true
+        webSettings.mediaPlaybackRequiresUserGesture = false
         webSettings.userAgentString = getRealDeviceUserAgent()
         webSettings.layoutAlgorithm = WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
         webSettings.setGeolocationEnabled(false)
@@ -240,13 +295,16 @@ class MainActivity : AppCompatActivity() {
         webSettings.blockNetworkImage = false
         webSettings.javaScriptCanOpenWindowsAutomatically = false
         webSettings.safeBrowsingEnabled = true
+        webSettings.setRenderPriority(WebSettings.RenderPriority.HIGH)
+        webSettings.setEnableSmoothTransition(true)
         
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.isScrollbarFadingEnabled = true
         webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         webView.isVerticalScrollBarEnabled = true
         webView.isHorizontalScrollBarEnabled = false
-        webView.overScrollMode = View.OVER_SCROLL_NEVER
+        webView.overScrollMode = View.OVER_SCROLL_ALWAYS
+        webView.isNestedScrollingEnabled = true
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
@@ -453,22 +511,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getRealDeviceUserAgent(): String {
-        val devices = listOf(
-            "SM-S928B" to "UP1A.231005.007",
-            "SM-S911B" to "TP1A.220624.014",
-            "SM-A546B" to "UP1A.231005.007",
-            "Pixel 8 Pro" to "UQ1A.240205.002",
-            "Pixel 7" to "TQ3A.230901.001",
-            "SM-G998B" to "TP1A.220624.014",
-            "SM-N986B" to "SP1A.210812.016",
-            "Pixel 6" to "TQ3A.230805.001",
-            "SM-A536B" to "UP1A.231005.007",
-            "SM-G991B" to "TP1A.220624.014"
-        )
-        val (model, buildId) = devices.random()
-        val androidVersion = listOf("13", "14").random()
-        val webViewVersion = getWebViewVersion()
-        return "Mozilla/5.0 (Linux; Android $androidVersion; $model Build/$buildId) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$webViewVersion Mobile Safari/537.36"
+        return WebSettings.getDefaultUserAgent(this)
     }
 
     private fun getWebViewVersion(): String {
@@ -490,6 +533,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        ContentFilterPipeline.resume()
         StatsTracker.resumeSession()
         timeLimitHandler.post(timeLimitRunnable)
         if (cameFromSettings) {
@@ -527,6 +571,7 @@ class MainActivity : AppCompatActivity() {
         webView.onPause()
         StatsTracker.pauseSession()
         timeLimitHandler.removeCallbacks(timeLimitRunnable)
+        ContentFilterPipeline.pause()
     }
 
     override fun onDestroy() {

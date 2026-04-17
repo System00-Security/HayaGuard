@@ -49,54 +49,55 @@
         </LinearLayout>
 
         <ImageButton
+            android:id="@+id/btnUnblur"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Unblur"
+            android:padding="4dp"
+            android:src="@drawable/ic_eye"
+            android:visibility="gone" />
+
+        <ImageButton
             android:id="@+id/btnHome"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="2dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Home"
-            android:padding="6dp"
+            android:padding="4dp"
             android:src="@drawable/ic_home"
             android:visibility="gone" />
 
         <ImageButton
             android:id="@+id/btnGoTop"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="2dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Go to top"
-            android:padding="6dp"
+            android:padding="4dp"
             android:src="@drawable/ic_arrow_up"
             android:visibility="gone" />
 
         <ImageButton
-            android:id="@+id/btnStats"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="2dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Statistics"
-            android:padding="6dp"
-            android:src="@drawable/ic_stats" />
-
-        <ImageButton
             android:id="@+id/btnSettings"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="2dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Settings"
-            android:padding="6dp"
+            android:padding="4dp"
             android:src="@drawable/ic_settings" />
 
         <ImageButton
             android:id="@+id/btnAbout"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="About"
-            android:padding="6dp"
+            android:padding="4dp"
             android:src="@drawable/ic_about" />
 
     </LinearLayout>
@@ -121,18 +122,6 @@
             android:id="@+id/webView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabUnblur"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:contentDescription="Unblur"
-            android:src="@android:drawable/ic_menu_view"
-            android:visibility="gone"
-            app:backgroundTint="#4CAF50"
-            app:tint="@android:color/white" />
 
     </FrameLayout>
 

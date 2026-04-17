@@ -16,8 +16,16 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import android.os.Build
 
 object CronetHelper {
+
+    private fun getDeviceUserAgent(): String {
+        val model = Build.MODEL
+        val buildId = Build.ID
+        val androidVersion = Build.VERSION.RELEASE
+        return "Mozilla/5.0 (Linux; Android $androidVersion; $model Build/$buildId; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36"
+    }
 
     private const val TAG = "CronetHelper"
 
@@ -62,7 +70,7 @@ object CronetHelper {
             .enableBrotli(true)
             .setStoragePath(cacheDir.absolutePath)
             .enableHttpCache(CronetEngine.Builder.HTTP_CACHE_DISK, 50 * 1024 * 1024)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            .setUserAgent(getDeviceUserAgent())
 
         addQuicHints(builder)
         
@@ -102,7 +110,7 @@ object CronetHelper {
             .enableBrotli(true)
             .setStoragePath(cacheDir.absolutePath)
             .enableHttpCache(CronetEngine.Builder.HTTP_CACHE_DISK, 50 * 1024 * 1024)
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            .setUserAgent(getDeviceUserAgent())
             .build()
     }
 

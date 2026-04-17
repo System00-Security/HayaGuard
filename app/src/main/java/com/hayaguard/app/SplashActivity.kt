@@ -11,6 +11,7 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AlphaAnimation
 import android.view.animation.AnimationSet
 import android.view.animation.ScaleAnimation
+import android.view.animation.TranslateAnimation
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
@@ -23,30 +24,64 @@ class SplashActivity : AppCompatActivity() {
         
         setContentView(R.layout.activity_splash)
         
-        val logo = findViewById<View>(R.id.splashLogo)
+        val logoCard = findViewById<View>(R.id.logoCard)
+        val title = findViewById<View>(R.id.appTitle)
+        val tagline = findViewById<View>(R.id.tagline)
         val text = findViewById<View>(R.id.craftedByText)
+        val ornamentTop = findViewById<View>(R.id.ornamentTop)
+        val ornamentBottom = findViewById<View>(R.id.ornamentBottom)
         
         val scaleAnim = ScaleAnimation(
-            0.5f, 1f, 0.5f, 1f,
+            0.6f, 1f, 0.6f, 1f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f
         )
-        scaleAnim.duration = 800
+        scaleAnim.duration = 700
         scaleAnim.interpolator = AccelerateDecelerateInterpolator()
         
         val fadeAnim = AlphaAnimation(0f, 1f)
-        fadeAnim.duration = 800
+        fadeAnim.duration = 700
         
         val animSet = AnimationSet(true)
         animSet.addAnimation(scaleAnim)
         animSet.addAnimation(fadeAnim)
         
-        logo.startAnimation(animSet)
+        logoCard.startAnimation(animSet)
+        
+        val titleFade = AlphaAnimation(0f, 1f)
+        titleFade.duration = 500
+        titleFade.startOffset = 300
+        title.startAnimation(titleFade)
+        
+        val taglineFade = AlphaAnimation(0f, 1f)
+        taglineFade.duration = 500
+        taglineFade.startOffset = 500
+        tagline.startAnimation(taglineFade)
         
         val textFade = AlphaAnimation(0f, 1f)
         textFade.duration = 600
-        textFade.startOffset = 400
+        textFade.startOffset = 700
         text.startAnimation(textFade)
+        
+        val slideDown = TranslateAnimation(
+            TranslateAnimation.RELATIVE_TO_SELF, 0f,
+            TranslateAnimation.RELATIVE_TO_SELF, 0f,
+            TranslateAnimation.RELATIVE_TO_SELF, -1f,
+            TranslateAnimation.RELATIVE_TO_SELF, 0f
+        )
+        slideDown.duration = 800
+        slideDown.interpolator = AccelerateDecelerateInterpolator()
+        ornamentTop.startAnimation(slideDown)
+        
+        val slideUp = TranslateAnimation(
+            TranslateAnimation.RELATIVE_TO_SELF, 0f,
+            TranslateAnimation.RELATIVE_TO_SELF, 0f,
+            TranslateAnimation.RELATIVE_TO_SELF, 1f,
+            TranslateAnimation.RELATIVE_TO_SELF, 0f
+        )
+        slideUp.duration = 800
+        slideUp.interpolator = AccelerateDecelerateInterpolator()
+        ornamentBottom.startAnimation(slideUp)
         
         Handler(Looper.getMainLooper()).postDelayed({
             startActivity(Intent(this, MainActivity::class.java))
@@ -57,6 +92,6 @@ class SplashActivity : AppCompatActivity() {
                 @Suppress("DEPRECATION")
                 overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
             }
-        }, 2000)
+        }, 2200)
     }
 }

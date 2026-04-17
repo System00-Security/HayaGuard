@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Outer circle -->
+  <circle cx="256" cy="256" r="230" fill="#0D7377"/>
+  <!-- Inner circle -->
+  <circle cx="256" cy="256" r="200" fill="#17A79A"/>
+  <!-- Shield outline -->
+  <path d="M256,100C170,100 130,150 130,150V280C130,380 256,430 256,430C256,430 382,380 382,280V150C382,150 342,100 256,100Z" 
+        stroke="#D4AF37" 
+        stroke-width="16" 
+        fill="none"/>
+  <!-- Left white bar -->
+  <rect x="166" y="160" width="70" height="190" rx="10" ry="10" fill="#FFFFFF"/>
+  <!-- Right white bar -->
+  <rect x="276" y="160" width="70" height="190" rx="10" ry="10" fill="#FFFFFF"/>
+  <!-- Gold connecting band -->
+  <path d="M166,256C166,256 220,230 256,230C292,230 346,256 346,256V286C346,286 292,260 256,260C220,260 166,286 166,286V256Z" 
+        fill="#D4AF37"/>
+</svg>

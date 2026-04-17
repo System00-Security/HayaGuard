@@ -3,18 +3,63 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
     android:background="@drawable/splash_background">
 
     <ImageView
-        android:id="@+id/splashLogo"
+        android:id="@+id/ornamentTop"
+        android:layout_width="0dp"
+        android:layout_height="120dp"
+        android:scaleType="fitXY"
+        android:src="@drawable/splash_ornament_top"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/patternLeft"
         android:layout_width="180dp"
         android:layout_height="180dp"
-        android:src="@drawable/ic_hayaguard_logo"
+        android:alpha="0.25"
+        android:src="@drawable/islamic_star_pattern"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginStart="-50dp" />
+
+    <ImageView
+        android:id="@+id/patternRight"
+        android:layout_width="180dp"
+        android:layout_height="180dp"
+        android:alpha="0.25"
+        android:rotation="180"
+        android:src="@drawable/islamic_star_pattern"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginEnd="-50dp" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/logoCard"
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        app:cardCornerRadius="70dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="#0D7377"
         app:layout_constraintBottom_toTopOf="@+id/appTitle"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed" />
+        app:layout_constraintVertical_chainStyle="packed">
+
+        <ImageView
+            android:id="@+id/splashLogo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="8dp"
+            android:src="@drawable/ic_hayaguard_logo" />
+
+    </androidx.cardview.widget.CardView>
 
     <TextView
         android:id="@+id/appTitle"
@@ -22,28 +67,53 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:fontFamily="sans-serif-black"
-        android:letterSpacing="0.05"
+        android:letterSpacing="0.08"
         android:text="HayaGuard"
         android:textColor="#FFFFFF"
-        android:textSize="32sp"
+        android:textSize="34sp"
+        android:shadowColor="#40000000"
+        android:shadowDx="0"
+        android:shadowDy="2"
+        android:shadowRadius="4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/splashLogo" />
+        app:layout_constraintTop_toBottomOf="@+id/logoCard" />
+
+    <TextView
+        android:id="@+id/tagline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="حَيَاء"
+        android:textColor="#D4AF37"
+        android:textSize="22sp"
+        android:fontFamily="serif"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/appTitle" />
 
     <TextView
         android:id="@+id/craftedByText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
         android:layout_marginBottom="80dp"
         android:text="Crafted by Abdur Rahman"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:fontFamily="sans-serif-medium"
-        android:letterSpacing="0.1"
+        android:textColor="#B0FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-light"
+        android:letterSpacing="0.15"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/appTitle" />
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <ImageView
+        android:id="@+id/ornamentBottom"
+        android:layout_width="0dp"
+        android:layout_height="120dp"
+        android:scaleType="fitXY"
+        android:src="@drawable/splash_ornament_bottom"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

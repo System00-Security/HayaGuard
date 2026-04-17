@@ -13,4 +13,9 @@
     <color name="header_subtitle">#6C757D</color>
     <color name="header_icon">#495057</color>
     <color name="progress_tint">#4A90D9</color>
+    <color name="islamic_primary">#17A79A</color>
+    <color name="islamic_primary_dark">#0D7377</color>
+    <color name="islamic_primary_light">#44C4C9</color>
+    <color name="islamic_gold">#D4AF37</color>
+    <color name="islamic_cream">#F5F0E1</color>
 </resources>

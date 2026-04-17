@@ -3,11 +3,6 @@ package com.hayaguard.app
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
 import android.net.Uri
 import android.os.Process
 import android.util.Log
@@ -24,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -39,21 +35,26 @@ class NSFWWebViewClient(
 
     var navigationListener: NavigationListener? = null
 
-    private val placeholderCache = LruCache<String, ByteArray>(50)
+    private val placeholderCache = LruCache<String, ByteArray>(AppConstants.Cache.PLACEHOLDER_CACHE_SIZE)
     private val pendingOriginals = java.util.concurrent.ConcurrentHashMap<String, ImageData>()
     private val processingStartTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    private val lowConfidenceThreshold = 0.75f
-    private val processingTimeout = 15000L
-    private val aiRaceTimeout = 300L
-    private val refreshRetryDelay = 100L
-    @Volatile private var currentWebView: WebView? = null
+    private val lowConfidenceThreshold = AppConstants.NSFWThresholds.LOW_CONFIDENCE
+    private val processingTimeout = AppConstants.Timeouts.PROCESSING_TIMEOUT_MS
+    private val aiRaceTimeout = AppConstants.Timeouts.AI_RACE_TIMEOUT_MS
+    private val refreshRetryDelay = AppConstants.Timeouts.REFRESH_RETRY_DELAY_MS
+    @Volatile private var currentWebViewRef: WeakReference<WebView>? = null
     private val hayaModeProcessor = HayaModeProcessor(context)
 
     companion object {
         private const val TAG = "NSFWWebViewClient"
-        private const val MIN_IMAGE_SIZE = 5000
-        private const val MIN_IMAGE_DIMENSION = 100
         private const val FACEBOOK_BLUE = 0xFF1877F2.toInt()
+        
+        private fun getDeviceUserAgent(): String {
+            val model = android.os.Build.MODEL
+            val buildId = android.os.Build.ID
+            val androidVersion = android.os.Build.VERSION.RELEASE
+            return "Mozilla/5.0 (Linux; Android $androidVersion; $model Build/$buildId; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36"
+        }
         
         private fun escapeJsString(input: String): String {
             val sb = StringBuilder()
@@ -117,7 +118,19 @@ class NSFWWebViewClient(
 
     private fun shouldPassthrough(url: String): Boolean {
         val lowercaseUrl = url.lowercase()
-        if (lowercaseUrl.contains(".html") ||
+        
+        if (isExcludedResource(lowercaseUrl)) return true
+        
+        if (!lowercaseUrl.contains("scontent") && !lowercaseUrl.contains("video")) {
+            if (!lowercaseUrl.contains("fbcdn") || !isUserContentImage(lowercaseUrl)) {
+                return true
+            }
+        }
+        return false
+    }
+    
+    private fun isExcludedResource(lowercaseUrl: String): Boolean {
+        return lowercaseUrl.contains(".html") ||
             lowercaseUrl.contains(".php") ||
             lowercaseUrl.contains(".js") ||
             lowercaseUrl.contains(".css") ||
@@ -136,35 +149,19 @@ class NSFWWebViewClient(
             lowercaseUrl.contains("emoji") ||
             lowercaseUrl.contains("sprite") ||
             lowercaseUrl.contains("/icon") ||
-            lowercaseUrl.contains("_icon")) {
-            return true
-        }
-        if (!lowercaseUrl.contains("scontent") && !lowercaseUrl.contains("video")) {
-            if (!lowercaseUrl.contains("fbcdn") || !isUserContentImage(lowercaseUrl)) {
-                return true
-            }
-        }
-        return false
+            lowercaseUrl.contains("_icon")
     }
 
-    private fun isUserContentImage(url: String): Boolean {
-        val lowercaseUrl = url.lowercase()
-        return (lowercaseUrl.endsWith(".jpg") ||
-                lowercaseUrl.endsWith(".jpeg") ||
-                lowercaseUrl.endsWith(".png") ||
-                lowercaseUrl.endsWith(".webp") ||
-                lowercaseUrl.contains(".jpg?") ||
-                lowercaseUrl.contains(".jpeg?") ||
-                lowercaseUrl.contains(".png?") ||
-                lowercaseUrl.contains(".webp?") ||
+    private fun isUserContentImage(lowercaseUrl: String): Boolean {
+        return hasImageExtension(lowercaseUrl) ||
                 lowercaseUrl.contains("photo") ||
                 lowercaseUrl.contains("thumbnail") ||
-                lowercaseUrl.contains("poster"))
+                lowercaseUrl.contains("poster")
     }
 
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         val rawUrl = request?.url?.toString() ?: return null
-        currentWebView = view
+        currentWebViewRef = view?.let { WeakReference(it) }
 
         if (TrackerBlocker.shouldBlock(rawUrl)) {
             return TrackerBlocker.createEmptyResponse()
@@ -286,7 +283,7 @@ class NSFWWebViewClient(
                 return null
             }
             
-            if (imageData.data.size < MIN_IMAGE_SIZE) {
+            if (imageData.data.size < AppConstants.ImageProcessing.MIN_IMAGE_SIZE) {
                 ImageStateManager.markDone(url, CachedResult(imageData.data, imageData.mimeType))
                 return createImageResponse(imageData.data, imageData.mimeType)
             }
@@ -301,7 +298,7 @@ class NSFWWebViewClient(
                 return createImageResponse(imageData.data, imageData.mimeType)
             }
 
-            if (bitmap.width < MIN_IMAGE_DIMENSION || bitmap.height < MIN_IMAGE_DIMENSION) {
+            if (bitmap.width < AppConstants.ImageProcessing.MIN_IMAGE_DIMENSION || bitmap.height < AppConstants.ImageProcessing.MIN_IMAGE_DIMENSION) {
                 bitmap.recycle()
                 ImageStateManager.markDone(url, CachedResult(imageData.data, imageData.mimeType))
                 return createImageResponse(imageData.data, imageData.mimeType)
@@ -418,7 +415,7 @@ class NSFWWebViewClient(
     }
 
     private fun refreshImageWithRetry(url: String, view: WebView?, attempt: Int = 0) {
-        val webView = view ?: currentWebView ?: return
+        val webView = view ?: currentWebViewRef?.get() ?: return
         val maxAttempts = 5
         val escapedUrl = escapeJsString(url)
         
@@ -453,27 +450,20 @@ class NSFWWebViewClient(
     private fun isImageUrl(url: String): Boolean {
         val lowercaseUrl = url.lowercase()
         
-        if (lowercaseUrl.contains(".js") || 
-            lowercaseUrl.contains(".css") || 
-            lowercaseUrl.contains(".html") ||
-            lowercaseUrl.contains(".woff") ||
-            lowercaseUrl.contains(".ttf") ||
-            lowercaseUrl.contains(".mp4") ||
-            lowercaseUrl.contains(".m3u8") ||
-            lowercaseUrl.contains(".mpd") ||
-            lowercaseUrl.contains("emoji") ||
-            lowercaseUrl.contains("static") ||
-            lowercaseUrl.contains("rsrc") ||
-            lowercaseUrl.contains("sprite") ||
-            lowercaseUrl.contains("/icon") ||
-            lowercaseUrl.contains("_icon")) {
-            return false
-        }
+        if (isExcludedResource(lowercaseUrl)) return false
         
         if (!lowercaseUrl.contains("scontent") && !lowercaseUrl.contains("fbcdn")) {
             return false
         }
         
+        return hasImageExtension(lowercaseUrl) ||
+                lowercaseUrl.contains("video") ||
+                lowercaseUrl.contains("thumbnail") ||
+                lowercaseUrl.contains("poster") ||
+                (lowercaseUrl.contains("photo") && !lowercaseUrl.contains("photoshop"))
+    }
+    
+    private fun hasImageExtension(lowercaseUrl: String): Boolean {
         return lowercaseUrl.endsWith(".jpg") ||
                 lowercaseUrl.endsWith(".jpeg") ||
                 lowercaseUrl.endsWith(".png") ||
@@ -482,11 +472,7 @@ class NSFWWebViewClient(
                 lowercaseUrl.contains(".jpg?") ||
                 lowercaseUrl.contains(".jpeg?") ||
                 lowercaseUrl.contains(".png?") ||
-                lowercaseUrl.contains(".webp?") ||
-                lowercaseUrl.contains("video") ||
-                lowercaseUrl.contains("thumbnail") ||
-                lowercaseUrl.contains("poster") ||
-                (lowercaseUrl.contains("photo") && !lowercaseUrl.contains("photoshop"))
+                lowercaseUrl.contains(".webp?")
     }
 
     private fun downloadImage(urlString: String, request: WebResourceRequest?): ImageData? {
@@ -515,10 +501,10 @@ class NSFWWebViewClient(
         return try {
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
+            connection.connectTimeout = AppConstants.Timeouts.CONNECTION_TIMEOUT_MS
+            connection.readTimeout = AppConstants.Timeouts.READ_TIMEOUT_MS
             connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            connection.setRequestProperty("User-Agent", getDeviceUserAgent())
             connection.setRequestProperty("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
             connection.setRequestProperty("Accept-Encoding", NetworkOptimizer.getOptimalAcceptEncoding())
             connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
@@ -566,248 +552,9 @@ class NSFWWebViewClient(
         }
     }
 
-    private fun applyPixelation(source: Bitmap): Bitmap {
-        val pixelSize = 32
-        val w = source.width
-        val h = source.height
-        val smallW = maxOf(w / pixelSize, 1)
-        val smallH = maxOf(h / pixelSize, 1)
-        val small = Bitmap.createScaledBitmap(source, smallW, smallH, false)
-        val pixelated = Bitmap.createScaledBitmap(small, w, h, false)
-        small.recycle()
-        return pixelated
-    }
+    private fun applyPixelation(source: Bitmap): Bitmap = ImageEffects.applyPixelation(source)
 
-    private fun applyStackBlur(bitmap: Bitmap, radius: Int): Bitmap {
-        val w = bitmap.width
-        val h = bitmap.height
-        val pix = IntArray(w * h)
-        bitmap.getPixels(pix, 0, w, 0, 0, w, h)
-
-        val wm = w - 1
-        val hm = h - 1
-        val wh = w * h
-        val div = radius + radius + 1
-
-        val r = IntArray(wh)
-        val g = IntArray(wh)
-        val b = IntArray(wh)
-        var rsum: Int
-        var gsum: Int
-        var bsum: Int
-        var x: Int
-        var y: Int
-        var i: Int
-        var p: Int
-        var yp: Int
-        var yi: Int
-        var yw: Int
-        val vmin = IntArray(maxOf(w, h))
-
-        var divsum = (div + 1) shr 1
-        divsum *= divsum
-        val dv = IntArray(256 * divsum)
-        i = 0
-        while (i < 256 * divsum) {
-            dv[i] = i / divsum
-            i++
-        }
-
-        yi = 0
-        yw = 0
-
-        val stack = Array(div) { IntArray(3) }
-        var stackpointer: Int
-        var stackstart: Int
-        var sir: IntArray
-        var rbs: Int
-        val r1 = radius + 1
-        var routsum: Int
-        var goutsum: Int
-        var boutsum: Int
-        var rinsum: Int
-        var ginsum: Int
-        var binsum: Int
-
-        y = 0
-        while (y < h) {
-            bsum = 0
-            gsum = 0
-            rsum = 0
-            boutsum = 0
-            goutsum = 0
-            routsum = 0
-            binsum = 0
-            ginsum = 0
-            rinsum = 0
-            i = -radius
-            while (i <= radius) {
-                p = pix[yi + minOf(wm, maxOf(i, 0))]
-                sir = stack[i + radius]
-                sir[0] = (p and 0xff0000) shr 16
-                sir[1] = (p and 0x00ff00) shr 8
-                sir[2] = p and 0x0000ff
-                rbs = r1 - kotlin.math.abs(i)
-                rsum += sir[0] * rbs
-                gsum += sir[1] * rbs
-                bsum += sir[2] * rbs
-                if (i > 0) {
-                    rinsum += sir[0]
-                    ginsum += sir[1]
-                    binsum += sir[2]
-                } else {
-                    routsum += sir[0]
-                    goutsum += sir[1]
-                    boutsum += sir[2]
-                }
-                i++
-            }
-            stackpointer = radius
-
-            x = 0
-            while (x < w) {
-                r[yi] = dv[rsum]
-                g[yi] = dv[gsum]
-                b[yi] = dv[bsum]
-
-                rsum -= routsum
-                gsum -= goutsum
-                bsum -= boutsum
-
-                stackstart = stackpointer - radius + div
-                sir = stack[stackstart % div]
-
-                routsum -= sir[0]
-                goutsum -= sir[1]
-                boutsum -= sir[2]
-
-                if (y == 0) {
-                    vmin[x] = minOf(x + radius + 1, wm)
-                }
-                p = pix[yw + vmin[x]]
-
-                sir[0] = (p and 0xff0000) shr 16
-                sir[1] = (p and 0x00ff00) shr 8
-                sir[2] = p and 0x0000ff
-
-                rinsum += sir[0]
-                ginsum += sir[1]
-                binsum += sir[2]
-
-                rsum += rinsum
-                gsum += ginsum
-                bsum += binsum
-
-                stackpointer = (stackpointer + 1) % div
-                sir = stack[stackpointer % div]
-
-                routsum += sir[0]
-                goutsum += sir[1]
-                boutsum += sir[2]
-
-                rinsum -= sir[0]
-                ginsum -= sir[1]
-                binsum -= sir[2]
-
-                yi++
-                x++
-            }
-            yw += w
-            y++
-        }
-
-        x = 0
-        while (x < w) {
-            bsum = 0
-            gsum = 0
-            rsum = 0
-            boutsum = 0
-            goutsum = 0
-            routsum = 0
-            binsum = 0
-            ginsum = 0
-            rinsum = 0
-            yp = -radius * w
-            i = -radius
-            while (i <= radius) {
-                yi = maxOf(0, yp) + x
-                sir = stack[i + radius]
-                sir[0] = r[yi]
-                sir[1] = g[yi]
-                sir[2] = b[yi]
-                rbs = r1 - kotlin.math.abs(i)
-                rsum += r[yi] * rbs
-                gsum += g[yi] * rbs
-                bsum += b[yi] * rbs
-                if (i > 0) {
-                    rinsum += sir[0]
-                    ginsum += sir[1]
-                    binsum += sir[2]
-                } else {
-                    routsum += sir[0]
-                    goutsum += sir[1]
-                    boutsum += sir[2]
-                }
-                if (i < hm) {
-                    yp += w
-                }
-                i++
-            }
-            yi = x
-            stackpointer = radius
-            y = 0
-            while (y < h) {
-                pix[yi] = (0xff000000.toInt() and pix[yi]) or (dv[rsum] shl 16) or (dv[gsum] shl 8) or dv[bsum]
-
-                rsum -= routsum
-                gsum -= goutsum
-                bsum -= boutsum
-
-                stackstart = stackpointer - radius + div
-                sir = stack[stackstart % div]
-
-                routsum -= sir[0]
-                goutsum -= sir[1]
-                boutsum -= sir[2]
-
-                if (x == 0) {
-                    vmin[y] = minOf(y + r1, hm) * w
-                }
-                p = x + vmin[y]
-
-                sir[0] = r[p]
-                sir[1] = g[p]
-                sir[2] = b[p]
-
-                rinsum += sir[0]
-                ginsum += sir[1]
-                binsum += sir[2]
-
-                rsum += rinsum
-                gsum += ginsum
-                bsum += binsum
-
-                stackpointer = (stackpointer + 1) % div
-                sir = stack[stackpointer]
-
-                routsum += sir[0]
-                goutsum += sir[1]
-                boutsum += sir[2]
-
-                rinsum -= sir[0]
-                ginsum -= sir[1]
-                binsum -= sir[2]
-
-                yi += w
-                y++
-            }
-            x++
-        }
-
-        val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        result.setPixels(pix, 0, w, 0, 0, w, h)
-        return result
-    }
+    private fun applyStackBlur(bitmap: Bitmap, radius: Int): Bitmap = ImageEffects.applyStackBlur(bitmap, radius)
 
     private fun createImageResponse(data: ByteArray, mimeType: String): WebResourceResponse {
         return WebResourceResponse(
@@ -833,83 +580,7 @@ class NSFWWebViewClient(
         )
     }
 
-    private fun createLogoPlaceholder(width: Int, height: Int): ByteArray {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        
-        canvas.drawColor(Color.parseColor("#1A1A2E"))
-        
-        val minDimension = minOf(width, height)
-        val logoSize = minOf(minDimension * 0.4f, 120f)
-        val centerX = width / 2f
-        val centerY = height / 2f
-        
-        val shieldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#4A90D9")
-            style = Paint.Style.FILL
-        }
-        
-        val shieldPath = Path().apply {
-            val shieldWidth = logoSize * 0.8f
-            val shieldHeight = logoSize
-            val left = centerX - shieldWidth / 2
-            val top = centerY - shieldHeight / 2
-            val right = centerX + shieldWidth / 2
-            val bottom = centerY + shieldHeight / 2
-            
-            moveTo(centerX, top)
-            lineTo(right, top + shieldHeight * 0.15f)
-            lineTo(right, top + shieldHeight * 0.5f)
-            quadTo(right, bottom - shieldHeight * 0.1f, centerX, bottom)
-            quadTo(left, bottom - shieldHeight * 0.1f, left, top + shieldHeight * 0.5f)
-            lineTo(left, top + shieldHeight * 0.15f)
-            close()
-        }
-        canvas.drawPath(shieldPath, shieldPaint)
-        
-        val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = logoSize * 0.06f
-            strokeCap = Paint.Cap.ROUND
-        }
-        
-        val eyeWidth = logoSize * 0.45f
-        val eyeHeight = logoSize * 0.25f
-        val eyeRect = RectF(
-            centerX - eyeWidth / 2,
-            centerY - eyeHeight / 2,
-            centerX + eyeWidth / 2,
-            centerY + eyeHeight / 2
-        )
-        canvas.drawOval(eyeRect, eyePaint)
-        
-        val pupilPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-        canvas.drawCircle(centerX, centerY, logoSize * 0.08f, pupilPaint)
-        
-        val slashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E74C3C")
-            style = Paint.Style.STROKE
-            strokeWidth = logoSize * 0.08f
-            strokeCap = Paint.Cap.ROUND
-        }
-        val slashOffset = logoSize * 0.25f
-        canvas.drawLine(
-            centerX - slashOffset,
-            centerY + slashOffset,
-            centerX + slashOffset,
-            centerY - slashOffset,
-            slashPaint
-        )
-        
-        val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 90, stream)
-        bitmap.recycle()
-        return stream.toByteArray()
-    }
+    private fun createLogoPlaceholder(width: Int, height: Int): ByteArray = ImageEffects.createLogoPlaceholder(width, height)
 
     override fun onPageFinished(view: WebView?, url: String?) {
         super.onPageFinished(view, url)
@@ -1065,7 +736,7 @@ class NSFWWebViewClient(
                 if (document.getElementById('hayaguard-perf-css')) return;
                 var style = document.createElement('style');
                 style.id = 'hayaguard-perf-css';
-                style.textContent = '* { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; } *::before, *::after { box-shadow: none !important; text-shadow: none !important; }';
+                style.textContent = '* { box-shadow: none !important; text-shadow: none !important; } *::before, *::after { box-shadow: none !important; text-shadow: none !important; } html, body { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; } .hg-hidden { display: none !important; visibility: hidden !important; height: 0 !important; max-height: 0 !important; overflow: hidden !important; opacity: 0 !important; pointer-events: none !important; margin: 0 !important; padding: 0 !important; position: absolute !important; left: -9999px !important; } img, video { content-visibility: auto; } [data-tracking-duration-id] { contain: layout style; } ';
                 document.head.appendChild(style);
             })();
         """.trimIndent(), null)
@@ -1079,10 +750,32 @@ class NSFWWebViewClient(
                 
                 var sponsoredPatterns = ['Sponsored', 'Gesponsert', 'Sponsorisé', 'Patrocinado', 'Bersponsor', 'প্রায়োজিত', 'স্পন্সরড', 'বিজ্ঞাপন', 'スポンサー', '赞助内容', '贊助', 'مُموَّستل', 'إعلان', 'Được tài trợ', 'ได้รับการสนับสนุน', 'Реклама', 'Publicidad', 'Reklam', 'Sponsorlu', 'Sponsorizzato', 'Gesponsord', 'Sponzorováno', 'Sponsorowane', 'Hirdetés', 'Sponset', 'Sponsrad', 'Sponsoroitu', 'Sponsoreret', 'Χορηγούμενο', 'ממומן', 'प्रायोजित', 'స్పాన్సర్డ్', 'ಪ್ರಾಯೋಜಿತ', 'സ്പോൺസർ ചെയ്തത്', 'ஸ்பான்சர்', 'ପ୍ରାୟୋଜିତ', 'સ્પોન્સર્ડ', 'ਸਪਾਂਸਰਡ', 'مالی تعاون یافتہ', 'Ditaja'];
                 var greyColors = ['8a8d91', '65686c', '606770', '90949c'];
+                var cleanupTimer = null;
+                var isCleanupScheduled = false;
                 
                 function hideElement(el) {
                     if (!el) return;
-                    el.style.cssText = 'display:none!important;visibility:hidden!important;height:0!important;max-height:0!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important;margin:0!important;padding:0!important;';
+                    if (el.classList) {
+                        el.classList.add('hg-hidden');
+                    } else {
+                        el.style.cssText = 'display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;pointer-events:none!important;position:absolute!important;left:-9999px!important;';
+                    }
+                }
+                
+                function scheduleCleanup() {
+                    if (isCleanupScheduled) return;
+                    isCleanupScheduled = true;
+                    if (window.requestIdleCallback) {
+                        window.requestIdleCallback(function() {
+                            runCleanup();
+                            isCleanupScheduled = false;
+                        }, { timeout: 200 });
+                    } else {
+                        setTimeout(function() {
+                            runCleanup();
+                            isCleanupScheduled = false;
+                        }, 150);
+                    }
                 }
                 
                 function isGreyColor(el) {
@@ -1127,6 +820,36 @@ class NSFWWebViewClient(
                         if (link.dataset && link.dataset.clOpenAppHidden) return;
                         link.dataset.clOpenAppHidden = '1';
                         hideElement(link);
+                    });
+                    var reelsOpenAppBtns = document.querySelectorAll('[role="button"][aria-label="Open app"]');
+                    reelsOpenAppBtns.forEach(function(btn) {
+                        if (btn.dataset && btn.dataset.clReelsOpenAppHidden) return;
+                        btn.dataset.clReelsOpenAppHidden = '1';
+                        hideElement(btn);
+                    });
+                    var openAppContainers = document.querySelectorAll('[data-mcomponent="MContainer"]');
+                    openAppContainers.forEach(function(container) {
+                        if (container.dataset && container.dataset.clReelsOpenAppHidden) return;
+                        var text = (container.textContent || '').trim();
+                        if (text === 'Open app' || text === '󱥬Open app') {
+                            var parent = container.parentElement;
+                            if (parent && parent.getAttribute('role') === 'button') {
+                                parent.dataset.clReelsOpenAppHidden = '1';
+                                hideElement(parent);
+                            } else {
+                                container.dataset.clReelsOpenAppHidden = '1';
+                                hideElement(container);
+                            }
+                        }
+                    });
+                    var allButtons = document.querySelectorAll('[role="button"][data-action-id]');
+                    allButtons.forEach(function(btn) {
+                        if (btn.dataset && btn.dataset.clReelsOpenAppHidden) return;
+                        var text = (btn.textContent || '').toLowerCase();
+                        if (text.indexOf('open app') !== -1 && btn.offsetWidth < 150 && btn.offsetHeight < 50) {
+                            btn.dataset.clReelsOpenAppHidden = '1';
+                            hideElement(btn);
+                        }
                     });
                 }
                 
@@ -1192,23 +915,214 @@ class NSFWWebViewClient(
                     }
                 }
                 
+                function removeLoginPromo() {
+                    var allFlexbox = document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]');
+                    allFlexbox.forEach(function(el) {
+                        if (el.dataset && el.dataset.clLoginPromoHidden) return;
+                        var text = (el.textContent || '').toLowerCase();
+                        if (text.indexOf('get facebook for android') !== -1 && text.indexOf('browse faster') !== -1) {
+                            el.dataset.clLoginPromoHidden = '1';
+                            hideElement(el);
+                        }
+                    });
+                    var allSpans = document.querySelectorAll('span[data-bloks-name="bk.components.Text"]');
+                    allSpans.forEach(function(span) {
+                        if (span.dataset && span.dataset.clLoginPromoHidden) return;
+                        var text = (span.textContent || '').toLowerCase();
+                        if (text.indexOf('get facebook for android') !== -1 || (text.indexOf('browse faster') !== -1 && text.indexOf('get') !== -1)) {
+                            var parent = span.parentElement;
+                            for (var i = 0; i < 8 && parent && parent !== document.body; i++) {
+                                if (parent.getAttribute && parent.getAttribute('data-bloks-name') === 'bk.components.Flexbox') {
+                                    var style = parent.getAttribute('style') || '';
+                                    if (style.indexOf('width: 100%') !== -1) {
+                                        parent.dataset.clLoginPromoHidden = '1';
+                                        hideElement(parent);
+                                        return;
+                                    }
+                                }
+                                parent = parent.parentElement;
+                            }
+                        }
+                    });
+                    var allDivs = document.querySelectorAll('div.wbloks_1');
+                    allDivs.forEach(function(div) {
+                        if (div.dataset && div.dataset.clLoginPromoHidden) return;
+                        var style = div.getAttribute('style') || '';
+                        if (style.indexOf('width: 100%') !== -1 && style.indexOf('align-items: center') !== -1 && style.indexOf('pointer-events: none') !== -1) {
+                            var text = (div.textContent || '').toLowerCase();
+                            if (text.indexOf('get facebook for android') !== -1 || text.indexOf('browse faster') !== -1) {
+                                div.dataset.clLoginPromoHidden = '1';
+                                hideElement(div);
+                            }
+                        }
+                    });
+                }
+                
                 function runCleanup() {
                     try {
                         removeOpenApp();
                         removeSponsored();
                         removePromos();
+                        removeLoginPromo();
                     } catch(e) {}
                 }
                 
                 runCleanup();
                 setTimeout(runCleanup, 500);
                 setTimeout(runCleanup, 1500);
-                setTimeout(runCleanup, 3000);
                 
-                var observer = new MutationObserver(function() {
-                    setTimeout(runCleanup, 100);
+                var observer = new MutationObserver(function(mutations) {
+                    if (mutations.length > 0) {
+                        scheduleCleanup();
+                    }
                 });
-                observer.observe(document.body || document.documentElement, {childList: true, subtree: true});
+                observer.observe(document.body || document.documentElement, {childList: true, subtree: true, attributes: false, characterData: false});
+                
+                var scrollTimer = null;
+                window.addEventListener('scroll', function() {
+                    if (scrollTimer) return;
+                    scrollTimer = setTimeout(function() {
+                        scrollTimer = null;
+                        scheduleCleanup();
+                    }, 300);
+                }, { passive: true });
+            })();
+        """.trimIndent(), null)
+        
+        val preloadDistance = AdaptivePerformanceEngine.getPreloadDistance()
+        val maxPreload = AdaptivePerformanceEngine.getMaxPreloadItems()
+        if (preloadDistance > 0 && maxPreload > 0) {
+            injectPreloadingScript(view, preloadDistance, maxPreload)
+        }
+    }
+    
+    private fun injectPreloadingScript(view: WebView?, preloadDistance: Int, maxPreload: Int) {
+        view?.evaluateJavascript("""
+            (function() {
+                if (window._hayaPreloadActive) return;
+                window._hayaPreloadActive = true;
+                
+                var preloadedUrls = new Set();
+                var preloadQueue = [];
+                var isProcessing = false;
+                var maxConcurrent = $maxPreload;
+                var activeLoads = 0;
+                var preloadDistancePx = $preloadDistance;
+                
+                function preloadImage(src) {
+                    if (preloadedUrls.has(src) || activeLoads >= maxConcurrent) {
+                        if (!preloadedUrls.has(src) && preloadQueue.length < 10) {
+                            preloadQueue.push(src);
+                        }
+                        return;
+                    }
+                    preloadedUrls.add(src);
+                    activeLoads++;
+                    var img = new Image();
+                    img.onload = img.onerror = function() {
+                        activeLoads--;
+                        processQueue();
+                    };
+                    img.src = src;
+                }
+                
+                function preloadVideo(src) {
+                    if (preloadedUrls.has(src)) return;
+                    preloadedUrls.add(src);
+                    var link = document.createElement('link');
+                    link.rel = 'preload';
+                    link.as = 'video';
+                    link.href = src;
+                    document.head.appendChild(link);
+                }
+                
+                function processQueue() {
+                    while (preloadQueue.length > 0 && activeLoads < maxConcurrent) {
+                        var src = preloadQueue.shift();
+                        if (!preloadedUrls.has(src)) {
+                            preloadImage(src);
+                        }
+                    }
+                }
+                
+                var preloadObserver = new IntersectionObserver(function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            var el = entry.target;
+                            var src = el.src || el.dataset.src || el.getAttribute('data-src');
+                            if (src && src.indexOf('fbcdn') !== -1) {
+                                if (el.tagName === 'VIDEO') {
+                                    preloadVideo(src);
+                                } else if (el.tagName === 'IMG') {
+                                    preloadImage(src);
+                                }
+                            }
+                            var poster = el.getAttribute('poster');
+                            if (poster && poster.indexOf('fbcdn') !== -1) {
+                                preloadImage(poster);
+                            }
+                        }
+                    });
+                }, {
+                    rootMargin: preloadDistancePx + 'px 0px',
+                    threshold: 0
+                });
+                
+                function observeMedia() {
+                    var images = document.querySelectorAll('img[src*="fbcdn"], img[data-src*="fbcdn"]');
+                    images.forEach(function(img) {
+                        if (!img.dataset.hgPreloadObserved) {
+                            img.dataset.hgPreloadObserved = '1';
+                            preloadObserver.observe(img);
+                        }
+                    });
+                    var videos = document.querySelectorAll('video[src*="fbcdn"], video[poster*="fbcdn"]');
+                    videos.forEach(function(video) {
+                        if (!video.dataset.hgPreloadObserved) {
+                            video.dataset.hgPreloadObserved = '1';
+                            preloadObserver.observe(video);
+                            if (video.preload !== 'auto') {
+                                video.preload = 'metadata';
+                            }
+                        }
+                    });
+                }
+                
+                observeMedia();
+                
+                var preloadMutationObserver = new MutationObserver(function(mutations) {
+                    if (window.requestIdleCallback) {
+                        window.requestIdleCallback(observeMedia, { timeout: 500 });
+                    } else {
+                        setTimeout(observeMedia, 100);
+                    }
+                });
+                preloadMutationObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+                
+                var reelsContainer = document.querySelector('[data-pagelet="Reels"]') || document.querySelector('[role="main"]');
+                if (reelsContainer) {
+                    var reelsObserver = new IntersectionObserver(function(entries) {
+                        entries.forEach(function(entry) {
+                            if (entry.isIntersecting) {
+                                var video = entry.target.querySelector('video');
+                                if (video && video.src) {
+                                    video.preload = 'auto';
+                                }
+                            }
+                        });
+                    }, {
+                        rootMargin: '2000px 0px',
+                        threshold: 0
+                    });
+                    
+                    var reelItems = document.querySelectorAll('[data-video-id], [data-store*="videoID"]');
+                    reelItems.forEach(function(item) {
+                        if (!item.dataset.hgReelObserved) {
+                            item.dataset.hgReelObserved = '1';
+                            reelsObserver.observe(item);
+                        }
+                    });
+                }
             })();
         """.trimIndent(), null)
     }

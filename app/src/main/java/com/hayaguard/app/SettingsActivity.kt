@@ -1,6 +1,7 @@
 package com.hayaguard.app
 
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -25,6 +26,7 @@ import kotlinx.coroutines.withContext
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var btnBack: ImageButton
+    private lateinit var cardStats: androidx.cardview.widget.CardView
     private lateinit var tvTimeLimitValue: TextView
     private lateinit var tvTimeLimitStatus: TextView
     private lateinit var etTimeValue: EditText
@@ -51,6 +53,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchQuickLens: SwitchCompat
     private lateinit var switchHideReels: SwitchCompat
     private lateinit var switchFriendsOnly: SwitchCompat
+    private lateinit var switchBatterySaver: SwitchCompat
 
     private val timeUnits = arrayOf("Minutes", "Hours")
 
@@ -72,6 +75,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun initViews() {
         btnBack = findViewById(R.id.btnBack)
+        cardStats = findViewById(R.id.cardStats)
         tvTimeLimitValue = findViewById(R.id.tvTimeLimitValue)
         tvTimeLimitStatus = findViewById(R.id.tvTimeLimitStatus)
         etTimeValue = findViewById(R.id.etTimeValue)
@@ -98,6 +102,7 @@ class SettingsActivity : AppCompatActivity() {
         switchQuickLens = findViewById(R.id.switchQuickLens)
         switchHideReels = findViewById(R.id.switchHideReels)
         switchFriendsOnly = findViewById(R.id.switchFriendsOnly)
+        switchBatterySaver = findViewById(R.id.switchBatterySaver)
     }
 
     private fun setupSpinner() {
@@ -114,6 +119,17 @@ class SettingsActivity : AppCompatActivity() {
             } else {
                 @Suppress("DEPRECATION")
                 overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+            }
+        }
+
+        cardStats.setOnClickListener {
+            val intent = Intent(this, DashboardActivity::class.java)
+            startActivity(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, R.anim.slide_in_right, R.anim.slide_out_left)
+            } else {
+                @Suppress("DEPRECATION")
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
             }
         }
 
@@ -166,6 +182,10 @@ class SettingsActivity : AppCompatActivity() {
         switchFriendsOnly.setOnCheckedChangeListener { _, isChecked ->
             SettingsManager.setFriendsOnlyEnabled(isChecked)
         }
+
+        switchBatterySaver.setOnCheckedChangeListener { _, isChecked ->
+            SettingsManager.setBatterySaverEnabled(isChecked)
+        }
     }
 
     private fun loadSettings() {
@@ -203,6 +223,8 @@ class SettingsActivity : AppCompatActivity() {
         switchHideReels.isChecked = SettingsManager.isHideReelsEnabled()
 
         switchFriendsOnly.isChecked = SettingsManager.isFriendsOnlyEnabled()
+
+        switchBatterySaver.isChecked = SettingsManager.isBatterySaverEnabled()
     }
 
     private fun updateTimeLimitDisplay(minutes: Int) {
